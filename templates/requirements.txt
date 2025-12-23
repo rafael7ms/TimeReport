@@ -1,0 +1,8 @@
+# requirements.txt
+flask
+pandas
+openpyxl
+numpy
+fuzzywuzzy
+python-Levenshtein
+gunicorn
