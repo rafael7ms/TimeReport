@@ -1,9 +1,9 @@
 import pandas as pd
 import os
-import re
 from fuzzywuzzy import fuzz, process
 import logging
 from datetime import datetime
+import re
 
 def setup_logging():
     """Configure logging to file and console"""
