@@ -4,19 +4,24 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.styles import Font, PatternFill, Alignment
 import logging
 from datetime import datetime, time, timedelta
+import os
+
 
 def setup_logging():
-    logger = logging.getLogger("TimeReport")
-    logger.setLevel(logging.INFO)
-    if not logger.handlers:
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    return logger
+    """Configure logging to file and console"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('time_report.log'),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger()
+
 
 def calculate_hours(start_str, end_str, logger):
-    """Calculate regular (6am-6pm) and night (6pm-6am) hours between two timestamps"""
+    """Calculate regular (6am-6pm) and night (6pm-6am) hours between two timestamps."""
     try:
         start_dt = pd.to_datetime(start_str, format='%m/%d/%Y %I:%M:%S%p')
         end_dt = pd.to_datetime(end_str, format='%m/%d/%Y %I:%M:%S%p')
@@ -30,8 +35,8 @@ def calculate_hours(start_str, end_str, logger):
         current = start_dt
         
         while current < end_dt:
-            day_start = datetime.combine(current.date(), time(6, 0))  # 6:00 AM
-            day_end = datetime.combine(current.date(), time(18, 0))   # 6:00 PM
+            day_start = datetime.combine(current.date(), time(6, 0))   # 6:00 AM
+            day_end = datetime.combine(current.date(), time(18, 0))    # 6:00 PM
             
             if current < day_start:
                 # Current time is before 6am (night)
@@ -55,8 +60,9 @@ def calculate_hours(start_str, end_str, logger):
         logger.error(f"Error calculating hours for {start_str} to {end_str}: {e}")
         return 0.0, 0.0
 
+
 def apply_table_formatting(worksheet, start_row, start_col, end_row, end_col, table_name, header_color):
-    """Apply formatting to Excel table"""
+    """Apply formatting to Excel table."""
     # Header formatting
     header_fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
@@ -69,8 +75,9 @@ def apply_table_formatting(worksheet, start_row, start_col, end_row, end_col, ta
         cell.font = header_font
         cell.alignment = header_alignment
 
+
 def apply_number_formatting(worksheet, start_row, end_row, start_col, end_col):
-    """Apply number formatting to specified columns"""
+    """Apply number formatting to specified columns."""
     for row in range(start_row, end_row + 1):
         for col in range(start_col, end_col + 1):
             cell = worksheet.cell(row=row, column=col)
@@ -78,8 +85,9 @@ def apply_number_formatting(worksheet, start_row, end_row, start_col, end_col):
                 cell.number_format = '0.00000'
                 cell.alignment = Alignment(horizontal="right")
 
+
 def add_total_row_formatting(worksheet, row, col_count, fill_color="D3D3D3"):
-    """Apply special formatting to total row"""
+    """Apply special formatting to total row."""
     total_fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
     total_font = Font(bold=True)
     
@@ -88,8 +96,9 @@ def add_total_row_formatting(worksheet, row, col_count, fill_color="D3D3D3"):
         cell.fill = total_fill
         cell.font = total_font
 
+
 def autofit_columns(worksheet):
-    """Auto-fit columns in Excel worksheet"""
+    """Auto-fit columns in Excel worksheet."""
     for column in worksheet.columns:
         max_length = 0
         column_letter = column[0].column_letter
@@ -102,9 +111,11 @@ def autofit_columns(worksheet):
         adjusted_width = (max_length + 2) * 1.2
         worksheet.column_dimensions[column_letter].width = adjusted_width
 
+
 def process_time_report(input_file, output_file):
-    """Process the time tracking data and generate reports"""
+    """Process the time tracking data and generate reports."""
     logger = setup_logging()
+    
     try:
         # Read input file
         logger.info(f"Reading input file: {input_file}")
@@ -294,6 +305,7 @@ def process_time_report(input_file, output_file):
     except Exception as e:
         logger.error(f"Error processing report: {e}")
         raise
+
 
 if __name__ == "__main__":
     import sys

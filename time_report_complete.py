@@ -529,101 +529,12 @@ def generate_time_report(data_df, output_file):
         apply_number_formatting(ws_all_data, start_row_all_data + 1, all_data_end_row, 5, 8)  # Format number columns
         add_total_row_formatting(ws_all_data, all_data_end_row, 8)
         
-        # Pivot to get IBC and Non-IBC side by side
-        ibc_states = state_summary_detailed[state_summary_detailed['Queue_Type'] == 'IBC'].drop(columns='Queue_Type')
-        non_ibc_states = state_summary_detailed[state_summary_detailed['Queue_Type'] == 'Non IBC'].drop(columns='Queue_Type')
-        
-        # Merge on Actual State and Scheduled State
-        final_state_summary = pd.merge(
-            ibc_states,
-            non_ibc_states,
-            on=['Actual State', 'Scheduled State'],
-            how='outer',
-            suffixes=('_IBC', '_Non_IBC')
-        ).fillna(0)
-        
-        # Add totals row
-        state_total = pd.DataFrame({
-            'Actual State': ['TOTAL'],
-            'Scheduled State': [''],
-            'Regular Hours_IBC': [final_state_summary['Regular Hours_IBC'].sum()],
-            'Night Hours_IBC': [final_state_summary['Night Hours_IBC'].sum()],
-            'Total Hours_IBC': [final_state_summary['Total Hours_IBC'].sum()],
-            'Regular Hours_Non_IBC': [final_state_summary['Regular Hours_Non_IBC'].sum()],
-            'Night Hours_Non_IBC': [final_state_summary['Night Hours_Non_IBC'].sum()],
-            'Total Hours_Non_IBC': [final_state_summary['Total Hours_Non_IBC'].sum()]
-        })
-        final_state_summary = pd.concat([final_state_summary, state_total], ignore_index=True)
         # Get all unique Actual State categories with their totals
         all_categories_summary = filtered_df.groupby(['Actual State']).agg({
             'Regular Hours': 'sum',
             'Night Hours': 'sum',
             'Total Hours': 'sum'
         }).reset_index()
-        
-        # Add Queue Type breakdown for categories
-        categories_detailed = filtered_df.groupby(['Actual State', 'Queue_Type']).agg({
-            'Regular Hours': 'sum',
-            'Night Hours': 'sum',
-            'Total Hours': 'sum'
-        }).reset_index()
-        
-        # Pivot to get IBC and Non-IBC side by side for categories
-        ibc_categories = categories_detailed[categories_detailed['Queue_Type'] == 'IBC'].drop(columns='Queue_Type')
-        non_ibc_categories = categories_detailed[categories_detailed['Queue_Type'] == 'Non IBC'].drop(columns='Queue_Type')
-        
-        # Merge on Actual State
-        final_categories_summary = pd.merge(
-            ibc_categories,
-            non_ibc_categories,
-            on=['Actual State'],
-            how='outer',
-            suffixes=('_IBC', '_Non_IBC')
-        ).fillna(0)
-        
-        # Add totals row for categories
-        categories_total = pd.DataFrame({
-            'Actual State': ['TOTAL'],
-            'Regular Hours_IBC': [final_categories_summary['Regular Hours_IBC'].sum()],
-            'Night Hours_IBC': [final_categories_summary['Night Hours_IBC'].sum()],
-            'Total Hours_IBC': [final_categories_summary['Total Hours_IBC'].sum()],
-            'Regular Hours_Non_IBC': [final_categories_summary['Regular Hours_Non_IBC'].sum()],
-            'Night Hours_Non_IBC': [final_categories_summary['Night Hours_Non_IBC'].sum()],
-            'Total Hours_Non_IBC': [final_categories_summary['Total Hours_Non_IBC'].sum()]
-        })
-        final_categories_summary = pd.concat([final_categories_summary, categories_total], ignore_index=True)
-        
-        ws_states = wb.create_sheet("Actual vs Scheduled State")
-        ws_states.cell(row=1, column=1, value="Actual vs Scheduled State Summary").font = Font(size=14, bold=True)
-        
-        # Write state summary data
-        start_row_states = 3
-        for r_idx, row in enumerate(dataframe_to_rows(final_state_summary, index=False, header=True), start_row_states):
-            for c_idx, value in enumerate(row, 1):
-                ws_states.cell(row=r_idx, column=c_idx, value=value)
-        
-        # Apply formatting
-        states_end_row = start_row_states + len(final_state_summary)
-        apply_table_formatting(ws_states, start_row_states, 1, states_end_row - 1, 8, "States_Table", "FF6B6B")
-        apply_number_formatting(ws_states, start_row_states + 1, states_end_row, 3, 8)  # Format number columns
-        add_total_row_formatting(ws_states, states_end_row, 8, "FFB6C1")
-        
-        # Create All Categories Summary Sheet
-        ws_categories = wb.create_sheet("All Categories Summary")
-        ws_categories.cell(row=1, column=1, value="All Categories Summary").font = Font(size=14, bold=True)
-        
-        # Write categories summary data
-        start_row_categories = 3
-        for r_idx, row in enumerate(dataframe_to_rows(final_categories_summary, index=False, header=True), start_row_categories):
-            for c_idx, value in enumerate(row, 1):
-                ws_categories.cell(row=r_idx, column=c_idx, value=value)
-        
-        # Apply formatting
-        categories_end_row = start_row_categories + len(final_categories_summary)
-        apply_table_formatting(ws_categories, start_row_categories, 1, categories_end_row - 1, 7, "Categories_Table", "9932CC")
-        apply_number_formatting(ws_categories, start_row_categories + 1, categories_end_row, 2, 7)  # Format number columns
-        add_total_row_formatting(ws_categories, categories_end_row, 7, "DDA0DD")
-        
         # Auto-fit columns
         for sheet in wb.sheetnames:
             autofit_columns(wb[sheet])
