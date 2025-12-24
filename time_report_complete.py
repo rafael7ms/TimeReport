@@ -372,6 +372,7 @@ def generate_time_report(data_df, output_file):
         logger.info("Creating Agent Summary")
         agent_summary = filtered_df.groupby([
             'Employee Name', 
+            'Batch',
             'Queue',
             'Date',
             'Actual State',
@@ -389,6 +390,7 @@ def generate_time_report(data_df, output_file):
         # Add totals
         ibc_total = pd.DataFrame({
             'Employee Name': ['TOTAL'],
+            'Batch': [''],
             'Queue': [''],
             'Date': [''],
             'Actual State': [''],
@@ -400,6 +402,7 @@ def generate_time_report(data_df, output_file):
         
         non_ibc_total = pd.DataFrame({
             'Employee Name': ['TOTAL'],
+            'Batch': [''],
             'Queue': [''],
             'Date': [''],
             'Actual State': [''],
@@ -492,10 +495,10 @@ def generate_time_report(data_df, output_file):
         apply_table_formatting(ws_cat, start_row_cat, 1, cat_end_row - 1, 5, "Category_Table", "70AD47")
         apply_number_formatting(ws_cat, start_row_cat + 1, cat_end_row, 2, 5)  # Format number columns
         add_total_row_formatting(ws_cat, cat_end_row, 5, "A9D08E")
-        
-        # Actual vs Scheduled State Summary Sheet
-        logger.info("Creating Actual vs Scheduled State Summary")
-        
+
+         # Create a sheet with all Data for review
+        logger.info("Creating All Data sheet for review")
+
         # Get all unique combinations of Actual State and Scheduled State
         state_summary = filtered_df.groupby(['Actual State', 'Scheduled State']).agg({
             'Regular Hours': 'sum',
@@ -509,6 +512,22 @@ def generate_time_report(data_df, output_file):
             'Night Hours': 'sum',
             'Total Hours': 'sum'
         }).reset_index()
+
+        # Create All Data sheet
+        ws_all_data = wb.create_sheet("All Data")
+        ws_all_data.cell(row=1, column=1, value="All Data").font = Font(size=14, bold=True)
+
+        # Write all data
+        start_row_all_data = 3
+        for r_idx, row in enumerate(dataframe_to_rows(data_df, index=False, header=True), start_row_all_data):
+            for c_idx, value in enumerate(row, 1):
+                ws_all_data.cell(row=r_idx, column=c_idx, value=value)
+
+        # Apply formatting
+        all_data_end_row = start_row_all_data + len(data_df)
+        apply_table_formatting(ws_all_data, start_row_all_data, 1, all_data_end_row - 1, 8, "All_Data_Table", "4472C4")
+        apply_number_formatting(ws_all_data, start_row_all_data + 1, all_data_end_row, 5, 8)  # Format number columns
+        add_total_row_formatting(ws_all_data, all_data_end_row, 8)
         
         # Pivot to get IBC and Non-IBC side by side
         ibc_states = state_summary_detailed[state_summary_detailed['Queue_Type'] == 'IBC'].drop(columns='Queue_Type')
@@ -535,10 +554,6 @@ def generate_time_report(data_df, output_file):
             'Total Hours_Non_IBC': [final_state_summary['Total Hours_Non_IBC'].sum()]
         })
         final_state_summary = pd.concat([final_state_summary, state_total], ignore_index=True)
-        
-        # Create a sheet with all categories of Actual State
-        logger.info("Creating All Categories Summary")
-        
         # Get all unique Actual State categories with their totals
         all_categories_summary = filtered_df.groupby(['Actual State']).agg({
             'Regular Hours': 'sum',
