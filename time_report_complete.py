@@ -277,12 +277,20 @@ def apply_table_formatting(worksheet, start_row, start_col, end_row, end_col, ta
     header_font = Font(bold=True, color="FFFFFF")
     header_alignment = Alignment(horizontal="center", vertical="center")
     
-    # Apply header formatting
+    # Apply header formatting to all columns in the header row
     for col in range(start_col, end_col + 1):
         cell = worksheet.cell(row=start_row, column=col)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = header_alignment
+    
+    # Ensure the header row has consistent formatting
+    header_row = worksheet[start_row]
+    for cell in header_row:
+        if cell.column >= start_col and cell.column <= end_col:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
 
 def apply_number_formatting(worksheet, start_row, end_row, start_col, end_col):
     """Apply number formatting to specified columns"""
@@ -297,11 +305,21 @@ def add_total_row_formatting(worksheet, row, col_count, fill_color="D3D3D3"):
     """Apply special formatting to total row"""
     total_fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
     total_font = Font(bold=True)
+    total_alignment = Alignment(horizontal="center", vertical="center")
     
     for col in range(1, col_count + 1):
         cell = worksheet.cell(row=row, column=col)
         cell.fill = total_fill
         cell.font = total_font
+        cell.alignment = total_alignment
+    
+    # Ensure the total row has consistent formatting
+    total_row = worksheet[row]
+    for cell in total_row:
+        if cell.column <= col_count:
+            cell.fill = total_fill
+            cell.font = total_font
+            cell.alignment = total_alignment
 
 def autofit_columns(worksheet):
     """Auto-fit columns in Excel worksheet"""
@@ -395,8 +413,7 @@ def generate_time_report(data_df, output_file):
             'Date': [''],
             'Actual State': [''],
             'Regular Hours': [ibc_agent_summary['Regular Hours'].sum()],
-            'Night Hours': [ibc_agent_summary['Night Hours'].sum()],
-            'Total Hours': [ibc_agent_summary['Total Hours'].sum()]
+            'Night Hours': [ibc_agent_summary['Night Hours'].sum()]
         })
         ibc_agent_summary = pd.concat([ibc_agent_summary, ibc_total], ignore_index=True)
         
@@ -407,8 +424,7 @@ def generate_time_report(data_df, output_file):
             'Date': [''],
             'Actual State': [''],
             'Regular Hours': [non_ibc_agent_summary['Regular Hours'].sum()],
-            'Night Hours': [non_ibc_agent_summary['Night Hours'].sum()],
-            'Total Hours': [non_ibc_agent_summary['Total Hours'].sum()]
+            'Night Hours': [non_ibc_agent_summary['Night Hours'].sum()]
         })
         non_ibc_agent_summary = pd.concat([non_ibc_agent_summary, non_ibc_total], ignore_index=True)
         
@@ -498,20 +514,6 @@ def generate_time_report(data_df, output_file):
 
          # Create a sheet with all Data for review
         logger.info("Creating All Data sheet for review")
-
-        # Get all unique combinations of Actual State and Scheduled State
-        state_summary = filtered_df.groupby(['Actual State', 'Scheduled State']).agg({
-            'Regular Hours': 'sum',
-            'Night Hours': 'sum',
-            'Total Hours': 'sum'
-        }).reset_index()
-        
-        # Add Queue Type breakdown
-        state_summary_detailed = filtered_df.groupby(['Actual State', 'Scheduled State', 'Queue_Type']).agg({
-            'Regular Hours': 'sum',
-            'Night Hours': 'sum',
-            'Total Hours': 'sum'
-        }).reset_index()
 
         # Create All Data sheet
         ws_all_data = wb.create_sheet("All Data")

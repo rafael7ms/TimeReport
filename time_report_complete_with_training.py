@@ -83,13 +83,13 @@ def process_employee_data(input_file):
         else:
             df = pd.read_csv(input_file, header=None, dtype=str, skip_blank_lines=False)
        
-        df = df.dropna(how='all')
-        df = df.dropna(axis='columns', how='all')
+        df=df.dropna(how='all')
+        df=df.dropna(axis='columns', how='all')
         logger.info(f"Successfully read file with {len(df)} rows")
     except Exception as e:
         logger.error(f"Error reading input file: {e}")
         return
-    
+
     # Initialize variables
     employee_group = None
     employee_name = None
@@ -113,69 +113,31 @@ def process_employee_data(input_file):
             continue
             
         # Check for Employee Group
-        employee_group_line = next((x for x in row_data if 'Employee Group:' in x), None)
-        if employee_group_line:
-            employee_group = employee_group_line.split('Employee Group:')[-1].strip()
+        if any('Employee Group:' in x for x in row_data):
+            employee_group = ' '.join(row_data).split('Employee Group:')[-1].strip().split(':')[0].strip()
             logger.info(f"Found Employee Group: {employee_group}")
             continue
             
         # Check for Employee Name
-        employee_name_line = next((x for x in row_data if 'Employee Name:' in x), None)
-        if employee_name_line:
-            employee_name = employee_name_line.split('Employee Name:')[-1].strip()
+        if any('Employee Name:' in x for x in row_data):
+            employee_name = ' '.join(row_data).split('Employee Name:')[-1].strip()
             logger.info(f"Found Employee Name: {employee_name}")
             continue
             
         # Check if this row matches the data pattern (date values present)
-        # For the sample file format, we need to construct proper datetime strings
-        logger.debug(f"Processing row {index}: {row_data}")
-        date_field = next((x for x in row_data if re.match(r'\d{1,2}/\d{1,2}/\d{4}', x)), None)
-        logger.debug(f"Date field found: {date_field}")
-        if date_field and len(row_data) >= 4:  # Reduced minimum length requirement
+        if any('/' in x for x in row_data) and len(row_data) >= 7:
             try:
                 # Extract data fields
-                # The format in the sample is: Date, Start Time, Stop Time, Duration, In Schedule, In Adherence, Scheduled State, Actual State
-                date_str = row_data[0] if len(row_data) > 0 else ''
-                start_time = row_data[1] if len(row_data) > 1 else ''
-                stop_time = row_data[2] if len(row_data) > 2 else ''
-                
-                # Construct full datetime strings
-                # For sample file, times are in 24-hour format without AM/PM
-                # We'll assume start times before 12:00 are AM, and times 12:00 and after are PM
-                if start_time and ':' in start_time:
-                    try:
-                        hour = int(start_time.split(':')[0])
-                        if hour < 12:
-                            start_datetime = f"{date_str} {start_time}AM"
-                        else:
-                            start_datetime = f"{date_str} {start_time}PM"
-                    except:
-                        start_datetime = f"{date_str} {start_time}"
-                else:
-                    start_datetime = f"{date_str} {start_time}"
-                    
-                if stop_time and ':' in stop_time:
-                    try:
-                        hour = int(stop_time.split(':')[0])
-                        if hour < 12 or hour == 24:  # 24:00 would be midnight
-                            stop_datetime = f"{date_str} {stop_time}AM"
-                        else:
-                            stop_datetime = f"{date_str} {stop_time}PM"
-                    except:
-                        stop_datetime = f"{date_str} {stop_time}"
-                else:
-                    stop_datetime = f"{date_str} {stop_time}"
-                
                 record = {
-                    'Employee Group': employee_group if employee_group else 'Unknown',
-                    'Employee Name': employee_name if employee_name else 'Unknown',
-                    'Start': start_datetime,
-                    'Stop': stop_datetime,
-                    'Duration': row_data[3] if len(row_data) > 3 else '',
-                    'In Schedule': row_data[4] if len(row_data) > 4 else '',
-                    'In Adherence': row_data[5] if len(row_data) > 5 else '',
-                    'Scheduled State': row_data[6] if len(row_data) > 6 else '',
-                    'Actual State': row_data[7] if len(row_data) > 7 else ''
+                    'Employee Group': employee_group,
+                    'Employee Name': employee_name,
+                    'Start': row_data[0] if len(row_data) > 0 else '',
+                    'Stop': row_data[2] if len(row_data) > 1 else '',
+                    'Duration': row_data[3] if len(row_data) > 2 else '',
+                    'In Schedule': row_data[4] if len(row_data) > 3 else '',
+                    'In Adherence': row_data[5] if len(row_data) > 4 else '',
+                    'Scheduled State': row_data[6] if len(row_data) > 5 else '',
+                    'Actual State': row_data[7] if len(row_data) > 6 else ''
                 }
                 records.append(record)
                 logger.debug(f"Added record: {record}")
@@ -183,8 +145,6 @@ def process_employee_data(input_file):
             except Exception as e:
                 logger.warning(f"Row {index+1}: Error processing data - {e}")
                 continue
-        else:
-            logger.debug(f"Row {index} does not match data pattern - date_field: {date_field}, row_data length: {len(row_data)}")
     
     # Create output DataFrame
     if records:
@@ -252,12 +212,13 @@ def add_queue_to_tracking_df(tracking_df, affiliation_file, min_confidence=80):
         merged_df = merged_df.drop(columns=['Normalized_Name_x', 'Normalized_Name_y', 'Matched_Name'])
         
         # Reorder columns to include additional fields
-        columns = ['Employee Name', 'Supervisor', 'Manager', 'Department', 'Role', 'Shift', 'Schedule', 'Batch',
+        columns = ['Employee Name', 'Batch', 'Supervisor', 'Manager', 'Department', 'Role', 'Shift', 'Schedule', 
                   'Start', 'Stop', 'Duration', 'In Schedule', 'In Adherence', 'Scheduled State', 'Actual State']
         # Keep only existing columns
         columns = [col for col in columns if col in merged_df.columns]
         merged_df = merged_df[columns]
         merged_df = merged_df.rename(columns={'Department': 'Queue'})
+
         # Generate matching report
         match_rate = len(name_matches) / len(tracking_names) * 100
         logger.info(f"Name matching completed with {match_rate:.2f}% success rate")
@@ -272,67 +233,13 @@ def add_queue_to_tracking_df(tracking_df, affiliation_file, min_confidence=80):
 def calculate_hours(start_str, end_str, logger):
     """Calculate regular (6am-6pm) and night (6pm-6am) hours between two timestamps"""
     try:
-        # Handle empty or invalid strings
-        if pd.isna(start_str) or pd.isna(end_str) or not start_str or not end_str:
-            logger.warning(f"Empty datetime values: start='{start_str}', end='{end_str}'")
-            return 0.0, 0.0
-            
-        # Clean the datetime strings
-        start_str = str(start_str).strip()
-        end_str = str(end_str).strip()
+        start_dt = pd.to_datetime(start_str, format='%m/%d/%Y %I:%M:%S%p')
+        end_dt = pd.to_datetime(end_str, format='%m/%d/%Y %I:%M:%S%p')
         
-        # Handle completely empty strings
-        if not start_str or not end_str or start_str.lower() == 'nan' or end_str.lower() == 'nan':
-            logger.warning(f"Invalid datetime values after cleaning: start='{start_str}', end='{end_str}'")
-            return 0.0, 0.0
-            
-        # Try multiple datetime formats
-        formats_to_try = [
-            '%m/%d/%Y %I:%M:%S%p',  # 12-hour with AM/PM
-            '%m/%d/%Y %H:%M:%S',    # 24-hour without AM/PM
-            '%m/%d/%Y %I:%M%p',     # 12-hour with AM/PM, no seconds
-            '%m/%d/%Y %H:%M',       # 24-hour without AM/PM, no seconds
-            '%m/%d/%Y %I%p',        # Just hour with AM/PM
-            '%m/%d/%Y %H'           # Just hour 24-hour
-        ]
-        
-        start_dt = None
-        end_dt = None
-        
-        # Try to parse start datetime
-        for fmt in formats_to_try:
-            try:
-                start_dt = datetime.strptime(start_str, fmt)
-                break
-            except ValueError:
-                continue
-                
-        # Try to parse end datetime
-        for fmt in formats_to_try:
-            try:
-                end_dt = datetime.strptime(end_str, fmt)
-                break
-            except ValueError:
-                continue
-                
-        # If parsing failed
-        if start_dt is None:
-            logger.error(f"Could not parse start datetime: '{start_str}'")
-            return 0.0, 0.0
-            
-        if end_dt is None:
-            logger.error(f"Could not parse end datetime: '{end_str}'")
-            return 0.0, 0.0
-            
-        # Ensure end time is after start time
         if start_dt > end_dt:
-            # Handle case where end time is next day (e.g., 11:00 PM to 2:00 AM)
-            if end_dt.time() < start_dt.time():
-                end_dt = end_dt.replace(day=end_dt.day + 1)
-            else:
-                logger.warning(f"Start time {start_str} is after end time {end_str}")
-                return 0.0, 0.0
-                
+            logger.warning(f"Start time {start_str} is after end time {end_str}")
+            return 0.0, 0.0
+            
         regular_hours = 0.0
         night_hours = 0.0
         current = start_dt
@@ -359,26 +266,9 @@ def calculate_hours(start_str, end_str, logger):
                 current = segment_end
                 
         return round(regular_hours, 5), round(night_hours, 5)
-        
     except Exception as e:
-        logger.error(f"Error calculating hours for start='{start_str}', end='{end_str}': {e}")
+        logger.error(f"Error calculating hours for {start_str} to {end_str}: {e}")
         return 0.0, 0.0
-
-def clean_datetime_data(df):
-    """Clean datetime columns to remove problematic data"""
-    # Clean Start and Stop columns
-    df['Start'] = df['Start'].astype(str).str.strip()
-    df['Stop'] = df['Stop'].astype(str).str.strip()
-    
-    # Remove rows with empty or obviously invalid datetime strings
-    df = df[df['Start'] != 'nan']
-    df = df[df['Stop'] != 'nan']
-    df = df[df['Start'] != '']
-    df = df[df['Stop'] != '']
-    df = df[~df['Start'].str.isspace()]
-    df = df[~df['Stop'].str.isspace()]
-    
-    return df
 
 def apply_table_formatting(worksheet, start_row, start_col, end_row, end_col, table_name, header_color):
     """Apply formatting to Excel table"""
@@ -387,12 +277,20 @@ def apply_table_formatting(worksheet, start_row, start_col, end_row, end_col, ta
     header_font = Font(bold=True, color="FFFFFF")
     header_alignment = Alignment(horizontal="center", vertical="center")
     
-    # Apply header formatting
+    # Apply header formatting to all columns in the header row
     for col in range(start_col, end_col + 1):
         cell = worksheet.cell(row=start_row, column=col)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = header_alignment
+    
+    # Ensure the header row has consistent formatting
+    header_row = worksheet[start_row]
+    for cell in header_row:
+        if cell.column >= start_col and cell.column <= end_col:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
 
 def apply_number_formatting(worksheet, start_row, end_row, start_col, end_col):
     """Apply number formatting to specified columns"""
@@ -407,11 +305,21 @@ def add_total_row_formatting(worksheet, row, col_count, fill_color="D3D3D3"):
     """Apply special formatting to total row"""
     total_fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
     total_font = Font(bold=True)
+    total_alignment = Alignment(horizontal="center", vertical="center")
     
     for col in range(1, col_count + 1):
         cell = worksheet.cell(row=row, column=col)
         cell.fill = total_fill
         cell.font = total_font
+        cell.alignment = total_alignment
+    
+    # Ensure the total row has consistent formatting
+    total_row = worksheet[row]
+    for cell in total_row:
+        if cell.column <= col_count:
+            cell.fill = total_fill
+            cell.font = total_font
+            cell.alignment = total_alignment
 
 def autofit_columns(worksheet):
     """Auto-fit columns in Excel worksheet"""
@@ -443,7 +351,8 @@ def generate_time_report(data_df, output_file):
             'Meeting - Pre-Shift',
             'Overtime Withdrawals',
             'Withdrawals',
-            'Wrap-Up'
+            'Wrap-Up',
+            'Training'
         ]
         
         # Filter for selected categories and specific queues only
@@ -453,20 +362,8 @@ def generate_time_report(data_df, output_file):
         ].copy()
         logger.info(f"Filtered to {len(filtered_df)} records in specified categories and queues")
         
-        # Clean datetime data
-        filtered_df = clean_datetime_data(filtered_df)
-        
-        # Extract date from Start time with error handling
-        try:
-            filtered_df['Date'] = pd.to_datetime(filtered_df['Start'], format='%m/%d/%Y %I:%M:%S%p', errors='coerce').dt.date
-        except:
-            # Fallback: try mixed format parsing
-            filtered_df['Date'] = pd.to_datetime(filtered_df['Start'], format='mixed', errors='coerce').dt.date
-
-        # Remove rows with invalid dates
-        filtered_df = filtered_df.dropna(subset=['Date'])
-        
-        # Batch information is now coming from the Roster file, not derived from date
+        # Extract date from Start time with explicit format
+        filtered_df['Date'] = pd.to_datetime(filtered_df['Start'], format='%m/%d/%Y %I:%M:%S%p').dt.date
         
         # Classify IBC vs Non-IBC
         def classify_queue(q):
@@ -509,56 +406,27 @@ def generate_time_report(data_df, output_file):
         ibc_agent_summary = agent_summary[agent_summary['Queue_Type'] == 'IBC'].drop(columns='Queue_Type')
         non_ibc_agent_summary = agent_summary[agent_summary['Queue_Type'] == 'Non IBC'].drop(columns='Queue_Type')
         
-        # Reorder columns to put Batch next to Employee Name
-        ibc_cols = ibc_agent_summary.columns.tolist()
-        if 'Batch' in ibc_cols and 'Employee Name' in ibc_cols:
-            # Move Batch right after Employee Name
-            ibc_cols.remove('Batch')
-            name_idx = ibc_cols.index('Employee Name')
-            ibc_cols.insert(name_idx + 1, 'Batch')
-            ibc_agent_summary = ibc_agent_summary[ibc_cols]
-        
-        non_ibc_cols = non_ibc_agent_summary.columns.tolist()
-        if 'Batch' in non_ibc_cols and 'Employee Name' in non_ibc_cols:
-            # Move Batch right after Employee Name
-            non_ibc_cols.remove('Batch')
-            name_idx = non_ibc_cols.index('Employee Name')
-            non_ibc_cols.insert(name_idx + 1, 'Batch')
-            non_ibc_agent_summary = non_ibc_agent_summary[non_ibc_cols]
-        
         # Add totals
-        ibc_total_data = {
+        ibc_total = pd.DataFrame({
             'Employee Name': ['TOTAL'],
             'Batch': [''],
             'Queue': [''],
             'Date': [''],
             'Actual State': [''],
             'Regular Hours': [ibc_agent_summary['Regular Hours'].sum()],
-            'Night Hours': [ibc_agent_summary['Night Hours'].sum()],
-            'Total Hours': [ibc_agent_summary['Total Hours'].sum()]
-        }
-        # Add any other columns that exist in the dataframe but not in the default list
-        for col in ibc_agent_summary.columns:
-            if col not in ibc_total_data:
-                ibc_total_data[col] = ['']
-        ibc_total = pd.DataFrame(ibc_total_data)
+            'Night Hours': [ibc_agent_summary['Night Hours'].sum()]
+        })
         ibc_agent_summary = pd.concat([ibc_agent_summary, ibc_total], ignore_index=True)
         
-        non_ibc_total_data = {
+        non_ibc_total = pd.DataFrame({
             'Employee Name': ['TOTAL'],
             'Batch': [''],
             'Queue': [''],
             'Date': [''],
             'Actual State': [''],
             'Regular Hours': [non_ibc_agent_summary['Regular Hours'].sum()],
-            'Night Hours': [non_ibc_agent_summary['Night Hours'].sum()],
-            'Total Hours': [non_ibc_agent_summary['Total Hours'].sum()]
-        }
-        # Add any other columns that exist in the dataframe but not in the default list
-        for col in non_ibc_agent_summary.columns:
-            if col not in non_ibc_total_data:
-                non_ibc_total_data[col] = ['']
-        non_ibc_total = pd.DataFrame(non_ibc_total_data)
+            'Night Hours': [non_ibc_agent_summary['Night Hours'].sum()]
+        })
         non_ibc_agent_summary = pd.concat([non_ibc_agent_summary, non_ibc_total], ignore_index=True)
         
         # Create Category Summary
@@ -593,39 +461,6 @@ def generate_time_report(data_df, output_file):
         })
         final_category = pd.concat([final_category, cat_total], ignore_index=True)
         
-        # Create All Data sheet (all employees and all actual states)
-        logger.info("Creating All Data sheet")
-        all_data_df = data_df.copy()
-        
-        # Clean datetime data for all data
-        all_data_df = clean_datetime_data(all_data_df)
-        
-        # Extract date from Start time with error handling
-        try:
-            all_data_df['Date'] = pd.to_datetime(all_data_df['Start'], format='%m/%d/%Y %I:%M:%S%p', errors='coerce').dt.date
-        except:
-            all_data_df['Date'] = pd.to_datetime(all_data_df['Start'], format='mixed', errors='coerce').dt.date
-
-        # Remove rows with invalid dates
-        all_data_df = all_data_df.dropna(subset=['Date'])
-        
-        # Calculate hours for all data
-        all_regular_hours = []
-        all_night_hours = []
-        for index, row in all_data_df.iterrows():
-            regular_hrs, night_hrs = calculate_hours(row['Start'], row['Stop'], logger)
-            all_regular_hours.append(regular_hrs)
-            all_night_hours.append(night_hrs)
-            
-        all_data_df['Regular Hours'] = all_regular_hours
-        all_data_df['Night Hours'] = all_night_hours
-        all_data_df['Total Hours'] = all_data_df['Regular Hours'] + all_data_df['Night Hours']
-        
-        # Create All Scheduled States sheet
-        logger.info("Creating All Scheduled States sheet")
-        scheduled_states_df = all_data_df[['Employee Name', 'Queue', 'Date', 'Batch', 'Scheduled State', 'Regular Hours', 'Night Hours', 'Total Hours']].copy()
-        scheduled_states_df = scheduled_states_df.dropna(subset=['Scheduled State'])
-        
         # Create Excel workbook
         wb = openpyxl.Workbook()
         
@@ -642,9 +477,9 @@ def generate_time_report(data_df, output_file):
         
         # Apply formatting
         end_row = start_row + len(ibc_agent_summary)
-        apply_table_formatting(ws_ibc, start_row, 1, end_row - 1, 8, "IBC_Table", "4472C4")  # Updated column count to 8
-        apply_number_formatting(ws_ibc, start_row + 1, end_row, 6, 8)  # Updated column range
-        add_total_row_formatting(ws_ibc, end_row, 8)
+        apply_table_formatting(ws_ibc, start_row, 1, end_row - 1, 7, "IBC_Table", "4472C4")
+        apply_number_formatting(ws_ibc, start_row + 1, end_row, 5, 7)  # Format number columns
+        add_total_row_formatting(ws_ibc, end_row, 7)
         
         # Non-IBC Agent Summary Sheet
         ws_non_ibc = wb.create_sheet("Non-IBC Agent Summary")
@@ -658,9 +493,9 @@ def generate_time_report(data_df, output_file):
         
         # Apply formatting
         end_row_non_ibc = start_row_non_ibc + len(non_ibc_agent_summary)
-        apply_table_formatting(ws_non_ibc, start_row_non_ibc, 1, end_row_non_ibc - 1, 8, "NonIBC_Table", "ED7D31")  # Updated column count to 8
-        apply_number_formatting(ws_non_ibc, start_row_non_ibc + 1, end_row_non_ibc, 6, 8)  # Updated column range
-        add_total_row_formatting(ws_non_ibc, end_row_non_ibc, 8)
+        apply_table_formatting(ws_non_ibc, start_row_non_ibc, 1, end_row_non_ibc - 1, 7, "NonIBC_Table", "ED7D31")
+        apply_number_formatting(ws_non_ibc, start_row_non_ibc + 1, end_row_non_ibc, 5, 7)  # Format number columns
+        add_total_row_formatting(ws_non_ibc, end_row_non_ibc, 7)
         
         # Category Summary Sheet
         ws_cat = wb.create_sheet("Category Summary")
@@ -677,39 +512,32 @@ def generate_time_report(data_df, output_file):
         apply_table_formatting(ws_cat, start_row_cat, 1, cat_end_row - 1, 5, "Category_Table", "70AD47")
         apply_number_formatting(ws_cat, start_row_cat + 1, cat_end_row, 2, 5)  # Format number columns
         add_total_row_formatting(ws_cat, cat_end_row, 5, "A9D08E")
-        
-        # All Data Sheet
-        ws_all = wb.create_sheet("All Data")
-        ws_all.cell(row=1, column=1, value="All Data").font = Font(size=14, bold=True)
-        
+
+         # Create a sheet with all Data for review
+        logger.info("Creating All Data sheet for review")
+
+        # Create All Data sheet
+        ws_all_data = wb.create_sheet("All Data")
+        ws_all_data.cell(row=1, column=1, value="All Data").font = Font(size=14, bold=True)
+
         # Write all data
-        start_row_all = 3
-        for r_idx, row in enumerate(dataframe_to_rows(all_data_df, index=False, header=True), start_row_all):
+        start_row_all_data = 3
+        for r_idx, row in enumerate(dataframe_to_rows(data_df, index=False, header=True), start_row_all_data):
             for c_idx, value in enumerate(row, 1):
-                ws_all.cell(row=r_idx, column=c_idx, value=value)
+                ws_all_data.cell(row=r_idx, column=c_idx, value=value)
+
+        # Apply formatting
+        all_data_end_row = start_row_all_data + len(data_df)
+        apply_table_formatting(ws_all_data, start_row_all_data, 1, all_data_end_row - 1, 8, "All_Data_Table", "4472C4")
+        apply_number_formatting(ws_all_data, start_row_all_data + 1, all_data_end_row, 5, 8)  # Format number columns
+        add_total_row_formatting(ws_all_data, all_data_end_row, 8)
         
-        # Apply formatting with different color
-        end_row_all = start_row_all + len(all_data_df)
-        apply_table_formatting(ws_all, start_row_all, 1, end_row_all - 1, len(all_data_df.columns), "AllData_Table", "FF6B6B")
-        apply_number_formatting(ws_all, start_row_all + 1, end_row_all, 10, 12)  # Format hours columns
-        add_total_row_formatting(ws_all, end_row_all, len(all_data_df.columns), "FFD700")
-        
-        # All Scheduled States Sheet
-        ws_scheduled = wb.create_sheet("All Scheduled States")
-        ws_scheduled.cell(row=1, column=1, value="All Scheduled States").font = Font(size=14, bold=True)
-        
-        # Write scheduled states data
-        start_row_scheduled = 3
-        for r_idx, row in enumerate(dataframe_to_rows(scheduled_states_df, index=False, header=True), start_row_scheduled):
-            for c_idx, value in enumerate(row, 1):
-                ws_scheduled.cell(row=r_idx, column=c_idx, value=value)
-        
-        # Apply formatting with different color
-        end_row_scheduled = start_row_scheduled + len(scheduled_states_df)
-        apply_table_formatting(ws_scheduled, start_row_scheduled, 1, end_row_scheduled - 1, len(scheduled_states_df.columns), "ScheduledStates_Table", "9B59B6")
-        apply_number_formatting(ws_scheduled, start_row_scheduled + 1, end_row_scheduled, 6, 8)  # Format hours columns
-        add_total_row_formatting(ws_scheduled, end_row_scheduled, len(scheduled_states_df.columns), "FFD700")
-        
+        # Get all unique Actual State categories with their totals
+        all_categories_summary = filtered_df.groupby(['Actual State']).agg({
+            'Regular Hours': 'sum',
+            'Night Hours': 'sum',
+            'Total Hours': 'sum'
+        }).reset_index()
         # Auto-fit columns
         for sheet in wb.sheetnames:
             autofit_columns(wb[sheet])
